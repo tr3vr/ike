@@ -64,14 +64,14 @@ object IkeBatchSearch extends App with Logging {
     opt[String]("text-source") action { (textSourceVal, options) =>
       options.copy(textSource = textSourceVal)
     } text ("Path of a file or directory to load the text from. This can be a local file (file://" +
-        " or absolute path) or an S3 URL (s3://).")
+      " or absolute path) or an S3 URL (s3://).")
     opt[String]("index-path") action { (indexPathVal, options) =>
       options.copy(indexPath = Some(indexPathVal))
     } text ("Path of the directory to store the index in. " +
-        "If omitted, a temporary directory will be created automatically.")
+      "If omitted, a temporary directory will be created automatically.")
     opt[String]("pattern-file") valueName ("<file>") required () action {
-       (patternFileVal, options) =>
-         options.copy(patternFile = patternFileVal)
+      (patternFileVal, options) =>
+        options.copy(patternFile = patternFileVal)
     } text ("Input pattern file")
     opt[String]("user-email") valueName ("<string>") required () action { (userEmailVal, options) =>
       options.copy(userEmail = userEmailVal)
@@ -133,7 +133,8 @@ object IkeBatchSearch extends App with Logging {
             interpolatedQuery,
             searcher,
             batchSearchOptions.textSource,
-            Some(WINDOW_SIZE))
+            Some(WINDOW_SIZE)
+          )
           Resource.using(new PrintWriter(outputFile)) { writer =>
             results.foreach { result =>
               writer.println(mapper.writeValueAsString(result))
