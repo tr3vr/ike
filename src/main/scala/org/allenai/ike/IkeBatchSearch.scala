@@ -2,6 +2,7 @@ package org.allenai.ike
 
 import org.allenai.common.Config._
 import org.allenai.common.{ Resource, Logging }
+import org.allenai.datastore.TempCleanup
 import org.allenai.ike.index.{ AnnotationIndexer, CreateIndex, IdText }
 import org.allenai.ike.patterns.NamedPattern
 import org.allenai.ike.persistence.Tablestore
@@ -171,9 +172,9 @@ object IkeBatchSearch extends App with Logging {
       dir.mkdir()
       dir
     }.getOrElse {
-      val tempDir = Files.createTempDirectory("ike").toFile
-      tempDir.deleteOnExit()
-      tempDir
+      val tempDir = Files.createTempDirectory("ike")
+      TempCleanup.remember(tempDir)
+      tempDir.toFile
     }
 
     // Split the patterns and key them by table name. We also validate the pattern lines here.
@@ -241,7 +242,7 @@ object IkeBatchSearch extends App with Logging {
 
       // Create a temporary output file for this (pattern, index) pair.
       val tempDir = Files.createTempDirectory("ike").toFile
-      tempDir.deleteOnExit()
+      TempCleanup.remember(tempDir.toPath)
 
       patternsByTable.flatMap {
         case (tableName, patternName) =>
@@ -271,6 +272,7 @@ object IkeBatchSearch extends App with Logging {
         formatTablesFromResults(sparkContext, tableName, batchSearchOptions.outputTableDir, paths)
     }
 
+    //TempCleanup.cleanup()
     println("Done")
     sys.exit(0)
   }
@@ -321,7 +323,6 @@ object IkeBatchSearch extends App with Logging {
       hitsWithCounts.toLocalIterator.foreach {
         case (output, count) =>
           // TODO: Create an 'unlabeled' category for the batch mode scenario.
-          // TODO: Save provenance.
           writer.println(output + "\tpositive")
       }
     }
