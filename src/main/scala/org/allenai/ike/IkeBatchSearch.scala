@@ -210,7 +210,7 @@ object IkeBatchSearch extends App with Logging {
       val textLines = sparkContext.textFile(batchSearchOptions.textSource)
       val sentences = textLines.repartition {
         val maxSentencesPerPartition = 256 * 1024
-        val minPartitions = Runtime.getRuntime.availableProcessors
+        val minPartitions = 8
         val idealPartitions = textLines.count.toDouble / maxSentencesPerPartition
         ((idealPartitions / minPartitions).ceil * minPartitions).toInt
       }
@@ -272,7 +272,6 @@ object IkeBatchSearch extends App with Logging {
         formatTablesFromResults(sparkContext, tableName, batchSearchOptions.outputTableDir, paths)
     }
 
-    //TempCleanup.cleanup()
     println("Done")
     sys.exit(0)
   }
