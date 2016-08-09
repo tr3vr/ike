@@ -29,6 +29,8 @@ libraryDependencies ++= Seq(
     allenAiCommon,
     allenAiTestkit,
     allenAiDatastore,
+    hadoopModule("hadoop-aws"),
+    hadoopModule("hadoop-mapreduce"),
     nlpstackModule("tokenize") exclude("org.allenai", "datastore_2.11"),
     nlpstackModule("postag") exclude("org.allenai", "datastore_2.11"),
     nlpstackModule("chunk") exclude("org.allenai", "datastore_2.11"),
@@ -39,17 +41,19 @@ libraryDependencies ++= Seq(
     lucene("highlighter"),
     lucene("queries"),
     lucene("queryparser"),
+    sparkModule("core"),
     "com.typesafe.slick" %% "slick" % "2.1.0",
     "com.github.tminglei" %% "slick-pg" % "0.8.2",
     "com.typesafe.play" %% "play-json" % "2.3.8",
     "org.postgresql" % "postgresql" % "9.4-1201-jdbc41",
-    "org.allenai.blacklab" %% "blacklab" % "1.0-ALLENAI-13",
+    "nl.inl.blacklab" % "blacklab" % "1.3.7",
     "org.allenai.word2vec" %% "word2vecjava" % "1.0.1",
     "com.google.guava" % "guava" % "18.0",
     "org.apache.thrift" % "libthrift" % "0.9.1",
     sprayModule("caching"),
     "com.papertrailapp" % "logback-syslog4j" % "1.0.0",
-    scopt)
+    scopt
+).map(_.exclude("org.slf4j", "log4j-over-slf4j"))
 
 javaOptions in Revolver.reStart += "-Xmx14G"
 
@@ -64,6 +68,7 @@ conflictManager := ConflictManager.default
 dependencyOverrides ++= Set(
   "org.allenai.common" %% "common-core" % "1.0.13",
   sprayJson,
+  "com.fasterxml.jackson.core" % "jackson-databind" % "2.4.4",
   "org.scala-lang.modules" %% "scala-parser-combinators" % "1.0.3",
   "org.scala-lang.modules" %% "scala-xml" % "1.0.2",
   "commons-codec" % "commons-codec" % "1.6",

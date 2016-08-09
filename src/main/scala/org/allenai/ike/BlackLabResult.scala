@@ -2,14 +2,32 @@ package org.allenai.ike
 
 import org.allenai.common.immutable.Interval
 
-import org.allenai.blacklab.search.{ Hit, Hits, Kwic, Span }
+import nl.inl.blacklab.search.{ Hit, Hits, Kwic, Span }
 
 import scala.collection.JavaConverters._
+import scala.collection.mutable
+
+// TODO: common.Interval isn't easily deserializable with Jackson, so this serves as a temporary
+// replacement.
+case class MyInterval(start: Int, end: Int) extends Ordered[MyInterval] {
+  def shift(by: Int): MyInterval = MyInterval(this.start + by, this.end + by)
+
+  override def compare(that: MyInterval): Int =
+    if (this.start > that.start) {
+      1
+    } else if (this.start < that.start) {
+      -1
+    } else {
+      this.length - that.length
+    }
+
+  def length: Int = end - start
+}
 
 case class BlackLabResult(
     wordData: Seq[WordData],
-    matchOffset: Interval,
-    captureGroups: Map[String, Interval],
+    matchOffset: MyInterval,
+    captureGroups: Map[String, MyInterval],
     corpusName: String
 ) {
   def matchData: Seq[WordData] = wordData.slice(matchOffset.start, matchOffset.end)
@@ -18,22 +36,22 @@ case class BlackLabResult(
 
 case object BlackLabResult {
   def wordData(hits: Hits, kwic: Kwic): Seq[WordData] = {
-    val attrNames = kwic.getProperties.asScala
-    val attrValues = kwic.getTokens.asScala.grouped(attrNames.size)
-    val attrGroups = attrValues.map(attrNames.zip(_).toMap).toSeq
-    for {
+    val attrNames: mutable.Buffer[String] = kwic.getProperties.asScala
+    val attrValues: Iterator[mutable.Buffer[String]] = kwic.getTokens.asScala.grouped(attrNames.size)
+    val attrGroups = attrValues.map(attrNames.zip(_).toMap)
+    (for {
       attrGroup <- attrGroups
       word = attrGroup.get("word") match {
         case Some(value) => value
         case _ => throw new IllegalStateException(s"kwic $kwic does not have 'word' attribute")
       }
       data = WordData(word, attrGroup - "word")
-    } yield data
+    } yield data).toSeq
   }
 
-  def toInterval(span: Span): Interval = Interval.open(span.start, span.end)
+  def toInterval(span: Span): MyInterval = MyInterval(span.start, span.end)
 
-  def captureGroups(hits: Hits, hit: Hit, shift: Int): Map[String, Option[Interval]] = {
+  def captureGroups(hits: Hits, hit: Hit, shift: Int): Map[String, Option[MyInterval]] = {
     val names = hits.getCapturedGroupNames.asScala
     // For some reason BlackLab will sometimes return null values here, so wrap in Options
     val optSpans = hits.getCapturedGroups(hit) map wrapNull
@@ -56,7 +74,7 @@ case object BlackLabResult {
   ): Option[BlackLabResult] = {
     val kwic = hits.getKwic(hit, kwicSize)
     val data = wordData(hits, kwic)
-    val offset = Interval.open(kwic.getHitStart, kwic.getHitEnd)
+    val offset = MyInterval(kwic.getHitStart, kwic.getHitEnd)
     // TODO: https://github.com/allenai/okcorpus/issues/30
     if (hits.hasCapturedGroups) {
       val shift = hit.start - kwic.getHitStart
@@ -71,7 +89,7 @@ case object BlackLabResult {
       }
     } else {
       // No capture groups? No problem.
-      Some(BlackLabResult(data, offset, Map.empty[String, Interval], corpusName))
+      Some(BlackLabResult(data, offset, Map.empty[String, MyInterval], corpusName))
     }
   }
 

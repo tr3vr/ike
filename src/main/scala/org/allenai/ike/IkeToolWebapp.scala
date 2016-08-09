@@ -128,7 +128,7 @@ class IkeToolActor extends Actor with HttpService with SprayJsonSupport with Log
               ).get
               val resultsFuture = searchersFuture.map { searchers =>
                 val parResult = searchers.par.flatMap { searcher =>
-                  searcher.search(interpolatedQuery, req.config).get
+                  searcher.search(interpolatedQuery, req.config).toSeq
                 }
                 parResult.seq
               }
@@ -152,7 +152,7 @@ class IkeToolActor extends Actor with HttpService with SprayJsonSupport with Log
               complete(searchersFuture.map { searchers =>
                 usageLogger.info(s"wordInfo for word ${req.word} on ($corpusNamesString)")
 
-                val results = searchers.par.map(_.wordInfo(req).get)
+                val results = searchers.par.map(_.wordInfo(req))
 
                 // find the word
                 val word = results.head.word
@@ -170,7 +170,7 @@ class IkeToolActor extends Actor with HttpService with SprayJsonSupport with Log
               })
             }
           }
-        } ~
+        } /*~
         path("suggestQuery") {
           post {
             entity(as[SuggestQueryRequest]) { req =>
@@ -186,7 +186,7 @@ class IkeToolActor extends Actor with HttpService with SprayJsonSupport with Log
               })
             }
           }
-        }
+        }*/
     } ~ path("similarPhrases") {
       parameters('phrase) { phrase =>
         complete {

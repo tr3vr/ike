@@ -6,8 +6,17 @@ import org.allenai.common.{ Logging, Timing }
 import org.apache.commons.lang.StringEscapeUtils
 
 import scala.collection.immutable
+import scala.collection.immutable.IndexedSeq
+import scala.collection.immutable.Range.Inclusive
 
 object SearchResultGrouper extends Logging {
+  /** Function that auto-generates column names given corresponding to a specified
+    * number of capture groups. Used for batch execution where a new table has to be created.
+    */
+  def generateColumnNamesForNewTable(numGroups: Int) = {
+    (0 until numGroups).map(i => s"Column_$i")
+  }
+
   def targetTable(req: SearchRequest, tables: Map[String, Table]): Option[Table] = for {
     target <- req.target
     table <- tables.get(target)
@@ -53,7 +62,7 @@ object SearchResultGrouper extends Logging {
     // of words from the result text it matches, the table name, column name and integer tag
     // coming from the relevant part of the user query.
     case class TableCaptureGroup(
-      captureGroup: (String, Interval), tableName: String, columnName: String, tag: Int
+      captureGroup: (String, MyInterval), tableName: String, columnName: String, tag: Int
     )
 
     // Helper Function that takes a table name and a collection of TableCaptureGroups
@@ -108,7 +117,7 @@ object SearchResultGrouper extends Logging {
 
     // Collect all the (tableName, groupName, tag) tuples for the Table Capture Groups.
     val groupInfos = (for {
-      tableGroup: (String, Interval) <- tableGroups
+      tableGroup: (String, MyInterval) <- tableGroups
       tableColTagMatch <- tableColTagCaptureGroupRegex.findFirstMatchIn(tableGroup._1)
       if (tableColTagMatch.groupCount == 4)
     } yield {
@@ -140,15 +149,18 @@ object SearchResultGrouper extends Logging {
       )
       val groupNames = filteredGroups.keys.toList.sortBy(groups)
 
-      val updatedGroups = for {
-        table <- targetTable(req, tables)
-        cols = table.cols
-        if cols.size == groupNames.size
-        if cols.toSet != groupNames.toSet
-        nameMap = groupNames.zip(cols).toMap
-        updatedGroups = filteredGroups.map { case (name, interval) => (nameMap(name), interval) }
-      } yield updatedGroups
-      val newGroups = updatedGroups.getOrElse(groups)
+      // If the table does not exist, we need to create one.
+      val cols = targetTable(req, tables) match {
+        case Some(table) => table.cols
+        case None => generateColumnNamesForNewTable(groupNames.size)
+      }
+      val newGroups = if ((cols.size == groupNames.size)
+        && (cols.toSet != groupNames.toSet)) {
+        val nameMap = groupNames.zip(cols).toMap
+        filteredGroups.map { case (name, interval) => (nameMap(name), interval) }
+      } else {
+        groups
+      }
       Some(result.copy(captureGroups = newGroups))
     }
   }
@@ -162,10 +174,16 @@ object SearchResultGrouper extends Logging {
     tables: Map[String, Table],
     result: BlackLabResult
   ): KeyedBlackLabResult = {
-    val groups = result.captureGroups
+    val groups: Map[String, MyInterval] = result.captureGroups
     val (columns, tableName) = targetTable(req, tables) match {
       case Some(table) => (table.cols, table.name)
-      case None => throw new IllegalArgumentException(s"No target table found")
+      case None =>
+        req.target match {
+          case Some(targetTableName) =>
+            val columns = generateColumnNamesForNewTable(groups.size)
+            (columns, targetTableName)
+          case None => throw new IllegalArgumentException(s"No target table found")
+        }
     }
     val intervals = for {
       col <- columns
@@ -204,7 +222,10 @@ object SearchResultGrouper extends Logging {
       grouped.map {
         case (keyString, group) =>
           val keys = keyString.map(_.mkString(" "))
-          val groupSubset = group.take(req.config.evidenceLimit)
+          val groupSubset = req.config.evidenceLimit match {
+            case Some(el) => group.take(el)
+            case None => group
+          }
           val relevanceScore = grouped.map {
             case (innerKeyString, innerGroup) =>
               if (isSubset(innerKeyString, keyString)) innerGroup.size else 0
@@ -231,7 +252,7 @@ object SearchResultGrouper extends Logging {
     tables: Map[String, Table],
     results: Iterable[BlackLabResult]
   ): Seq[GroupedBlackLabResult] = {
-    val withColumnNames = results.map(inferCaptureGroupNames(req, tables, _)).flatten
+    val withColumnNames: Iterable[BlackLabResult] = results.flatMap(inferCaptureGroupNames(req, tables, _))
     val keyed = withColumnNames.map(keyResult(req, tables, _))
     createGroups(req, keyed)
   }

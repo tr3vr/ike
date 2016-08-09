@@ -12,7 +12,7 @@ import scala.util.control.NonFatal
 import scala.util.parsing.combinator.RegexParsers
 import scala.util.{ Failure, Success, Try }
 
-sealed trait QExpr
+sealed trait QExpr extends Serializable
 sealed trait QLeaf extends QExpr
 sealed trait QAtom extends QExpr {
   val qexpr: QExpr
